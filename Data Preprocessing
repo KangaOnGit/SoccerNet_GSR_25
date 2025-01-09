@@ -1,0 +1,497 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "d7820db3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-01-09T01:30:04.932121Z",
+     "iopub.status.busy": "2025-01-09T01:30:04.931621Z",
+     "iopub.status.idle": "2025-01-09T01:30:04.937664Z",
+     "shell.execute_reply": "2025-01-09T01:30:04.936533Z"
+    },
+    "papermill": {
+     "duration": 0.012617,
+     "end_time": "2025-01-09T01:30:04.939445",
+     "exception": false,
+     "start_time": "2025-01-09T01:30:04.926828",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import json\n",
+    "import time"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b6f388e3",
+   "metadata": {
+    "papermill": {
+     "duration": 0.002548,
+     "end_time": "2025-01-09T01:30:04.945490",
+     "exception": false,
+     "start_time": "2025-01-09T01:30:04.942942",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "-------------------------------------------------------------------"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "7f27ae95",
+   "metadata": {
+    "papermill": {
+     "duration": 0.002629,
+     "end_time": "2025-01-09T01:30:04.950979",
+     "exception": false,
+     "start_time": "2025-01-09T01:30:04.948350",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# **Data Preprocessing**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "4444df00",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-01-09T01:30:04.958405Z",
+     "iopub.status.busy": "2025-01-09T01:30:04.958020Z",
+     "iopub.status.idle": "2025-01-09T01:30:04.972447Z",
+     "shell.execute_reply": "2025-01-09T01:30:04.971445Z"
+    },
+    "papermill": {
+     "duration": 0.02042,
+     "end_time": "2025-01-09T01:30:04.974302",
+     "exception": false,
+     "start_time": "2025-01-09T01:30:04.953882",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "def SoccerNet_LoadData(root_dir, img_width=1920, img_height=1080):\n",
+    "    \"\"\"\n",
+    "    Function to load SoccerNet data, extract annotations, and organize metadata.\n",
+    "\n",
+    "    Arguments:\n",
+    "    root_dir (str): Path to the root directory containing game folders.\n",
+    "    img_width (int): Width of the images for normalization.\n",
+    "    img_height (int): Height of the images for normalization.\n",
+    "\n",
+    "    Returns:\n",
+    "    match_info (list): Metadata about each match.\n",
+    "    obj_in_image (list): Metadata about each image, including annotations.\n",
+    "    images (list): Raw image information from the dataset.\n",
+    "    \"\"\"\n",
+    "    match_info = []\n",
+    "    obj_in_image = []\n",
+    "    images = []\n",
+    "\n",
+    "    # Sort game folders by their numeric part\n",
+    "    game_folders = sorted(\n",
+    "        [folder for folder in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, folder))],\n",
+    "        key=lambda x: int(''.join(filter(str.isdigit, x)))  # Extract numeric part for sorting\n",
+    "    )\n",
+    "\n",
+    "    for idx, train_folder in enumerate(game_folders):\n",
+    "        train_folder_path = os.path.join(root_dir, train_folder)\n",
+    "        image_folder_path = os.path.join(train_folder_path, 'img1')\n",
+    "        label_path = os.path.join(train_folder_path, 'Labels-GameState.json')\n",
+    "\n",
+    "        # Sort image paths by their numeric part\n",
+    "        image_paths = sorted(\n",
+    "            [img for img in os.listdir(image_folder_path) if img.endswith(('.jpg', '.png'))],\n",
+    "            key=lambda x: int(''.join(filter(str.isdigit, x)))  # Extract numeric part for sorting\n",
+    "        )\n",
+    "\n",
+    "        # Load the label data\n",
+    "        with open(label_path, 'r') as label_file:\n",
+    "            label_data = json.load(label_file)\n",
+    "\n",
+    "            # Append match metadata\n",
+    "            match_info.append(\n",
+    "                {\n",
+    "                    'Game Version': label_data['info']['version'],\n",
+    "                    'Game ID': label_data['info']['game_id'],\n",
+    "                    'Game Unique ID': label_data['info']['id'],\n",
+    "                    'Tracklets Count': label_data['info']['num_tracklets'],\n",
+    "                    'Action Position': label_data['info']['action_position'],\n",
+    "                    'Action Class': label_data['info']['action_class'],\n",
+    "                    'Game Folder Path': train_folder_path,\n",
+    "                    'Image Folder Path': image_folder_path\n",
+    "                }\n",
+    "            )\n",
+    "\n",
+    "            # Extract image IDs from label data\n",
+    "            img_ids = [img['image_id'] for img in label_data['images']]\n",
+    "\n",
+    "            for i, img_id in enumerate(img_ids):\n",
+    "                img_data = next((img for img in label_data['images'] if img['image_id'] == img_id), None)\n",
+    "                images.append(img_data)\n",
+    "\n",
+    "                if img_data:\n",
+    "                    annotations = []\n",
+    "                    for annotation in label_data['annotations']:\n",
+    "                        if annotation[\"image_id\"] == img_id and annotation['supercategory'] != \"pitch\":\n",
+    "                            bbox_image = annotation.get('bbox_image', {})\n",
+    "                            x_center = bbox_image.get('x_center', 0) / img_width\n",
+    "                            y_center = bbox_image.get('y_center', 0) / img_height\n",
+    "                            w = bbox_image.get('w', 0) / img_width\n",
+    "                            h = bbox_image.get('h', 0) / img_height\n",
+    "\n",
+    "                            annotations.append(\n",
+    "                                {\n",
+    "                                    \"Team\": annotation['attributes'].get('team', None),\n",
+    "                                    \"Role\": annotation['attributes'].get('role', None),\n",
+    "                                    \"Jersey Number\": annotation['attributes'].get('jersey', None),\n",
+    "                                    \"Bounding Box (Image)\": (annotation['category_id'], x_center, y_center, w, h, annotation['track_id'])\n",
+    "                                }\n",
+    "                            )\n",
+    "\n",
+    "                    # Aggregate annotation data for each image\n",
+    "                    bounding_boxes = [ann.get(\"Bounding Box (Image)\", {}) for ann in annotations]\n",
+    "                    teams = [ann.get(\"Team\", None) for ann in annotations]\n",
+    "                    roles = [ann.get(\"Role\", None) for ann in annotations]\n",
+    "                    jersey_numbers = [ann.get(\"Jersey Number\", None) for ann in annotations]\n",
+    "\n",
+    "                    # Append image metadata\n",
+    "                    obj_in_image.append({\n",
+    "                        \"Image ID\": img_id,\n",
+    "                        \"Image Path\": os.path.join(image_folder_path, image_paths[i]),\n",
+    "                        \"Bounding Boxes (Image)\": bounding_boxes, # (Class ID, x_center, y_center, w, h, track ID)\n",
+    "                        \"Teams\": teams,\n",
+    "                        \"Roles\": roles,\n",
+    "                        \"Jersey Numbers\": jersey_numbers\n",
+    "                    })\n",
+    "\n",
+    "    return match_info, obj_in_image, images"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "106e16e0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-01-09T01:30:04.981511Z",
+     "iopub.status.busy": "2025-01-09T01:30:04.981182Z",
+     "iopub.status.idle": "2025-01-09T01:33:46.159145Z",
+     "shell.execute_reply": "2025-01-09T01:33:46.157997Z"
+    },
+    "papermill": {
+     "duration": 221.186932,
+     "end_time": "2025-01-09T01:33:46.164258",
+     "exception": false,
+     "start_time": "2025-01-09T01:30:04.977326",
+     "status": "completed"
+    },
+    "scrolled": true,
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Time taken to process: 221.17 seconds\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Start the timer\n",
+    "epoch_start_time = time.time()\n",
+    "\n",
+    "root = '/kaggle/input/gsr-soccernet-train-set'\n",
+    "match_info, obj_in_image, images = SoccerNet_LoadData(root)\n",
+    "\n",
+    "epoch_end_time = time.time()\n",
+    "time_taken = epoch_end_time - epoch_start_time\n",
+    "print(f\"Time taken to process: {time_taken:.2f} seconds\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "c0485768",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-01-09T01:33:46.171503Z",
+     "iopub.status.busy": "2025-01-09T01:33:46.171127Z",
+     "iopub.status.idle": "2025-01-09T01:33:46.183991Z",
+     "shell.execute_reply": "2025-01-09T01:33:46.182836Z"
+    },
+    "papermill": {
+     "duration": 0.018654,
+     "end_time": "2025-01-09T01:33:46.185927",
+     "exception": false,
+     "start_time": "2025-01-09T01:33:46.167273",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "----------------------------------------\n",
+      "Match Info (1st entry):\n",
+      "{'Game Version': '1.3', 'Game ID': '4', 'Game Unique ID': '060', 'Tracklets Count': '26', 'Action Position': '895', 'Action Class': 'Kick-off', 'Game Folder Path': '/kaggle/input/gsr-soccernet-train-set/SNGS-060', 'Image Folder Path': '/kaggle/input/gsr-soccernet-train-set/SNGS-060/img1'}\n",
+      "----------------------------------------\n",
+      "Bounding boxes and other information of all objects in an image (1st entry):\n",
+      "{'Image ID': '1060000001', 'Image Path': '/kaggle/input/gsr-soccernet-train-set/SNGS-060/img1/000001.jpg', 'Bounding Boxes (Image)': [(1, 0.4903645833333333, 0.8712962962962963, 0.028645833333333332, 0.15925925925925927, 1), (1, 0.4859375, 0.5888888888888889, 0.016666666666666666, 0.11296296296296296, 2), (1, 0.51171875, 0.5773148148148148, 0.027604166666666666, 0.12314814814814815, 3), (1, 0.6661458333333333, 0.6884259259259259, 0.022916666666666665, 0.13055555555555556, 4), (1, 0.9911458333333333, 0.41712962962962963, 0.015625, 0.09351851851851851, 5), (1, 0.89921875, 0.3384259259259259, 0.011979166666666667, 0.075, 6), (1, 0.8046875, 0.48055555555555557, 0.026041666666666668, 0.07592592592592592, 7), (1, 0.7481770833333333, 0.5439814814814815, 0.021354166666666667, 0.10462962962962963, 8), (1, 0.5768229166666666, 0.38981481481481484, 0.0171875, 0.07962962962962963, 9), (1, 0.5151041666666667, 0.34305555555555556, 0.011458333333333333, 0.06944444444444445, 10), (1, 0.5216145833333333, 0.4777777777777778, 0.015104166666666667, 0.0962962962962963, 11), (1, 0.4942708333333333, 0.3333333333333333, 0.0125, 0.07222222222222222, 12), (1, 0.49192708333333335, 0.28564814814814815, 0.011979166666666667, 0.05277777777777778, 13), (3, 0.43046875, 0.362962962962963, 0.028645833333333332, 0.07222222222222222, 14), (1, 0.340625, 0.4083333333333333, 0.017708333333333333, 0.08703703703703704, 15), (1, 0.13489583333333333, 0.4736111111111111, 0.014583333333333334, 0.10092592592592593, 16), (3, 0.10494791666666667, 0.26851851851851855, 0.013020833333333334, 0.053703703703703705, 17), (4, 0.5015625, 0.5152777777777777, 0.00625, 0.010185185185185186, 18)], 'Teams': ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'left', 'left', 'left', None, 'left', 'left', None, None], 'Roles': ['player', 'player', 'player', 'player', 'player', 'player', 'player', 'player', 'player', 'player', 'player', 'player', 'player', 'referee', 'player', 'player', 'referee', 'ball'], 'Jersey Numbers': ['10', '30', '27', '10', '75', None, '8', '4', '14', None, '3', '25', None, None, None, '8', None, None]}\n",
+      "----------------------------------------\n",
+      "Raw Image Data (1st entry):\n",
+      "{'is_labeled': True, 'image_id': '1060000001', 'file_name': '000001.jpg', 'height': 1080, 'width': 1920, 'has_labeled_person': True, 'has_labeled_pitch': True, 'has_labeled_camera': True, 'ignore_regions_y': [], 'ignore_regions_x': []}\n",
+      "----------------------------------------\n",
+      "Match Info Keys:\n",
+      "dict_keys(['Game Version', 'Game ID', 'Game Unique ID', 'Tracklets Count', 'Action Position', 'Action Class', 'Game Folder Path', 'Image Folder Path'])\n",
+      "----------------------------------------\n",
+      "obj_in_image Keys:\n",
+      "dict_keys(['Image ID', 'Image Path', 'Bounding Boxes (Image)', 'Teams', 'Roles', 'Jersey Numbers'])\n",
+      "----------------------------------------\n",
+      "Image Data Keys:\n",
+      "dict_keys(['is_labeled', 'image_id', 'file_name', 'height', 'width', 'has_labeled_person', 'has_labeled_pitch', 'has_labeled_camera', 'ignore_regions_y', 'ignore_regions_x'])\n",
+      "----------------------------------------\n",
+      "This is a Tuple: (1, 0.4903645833333333, 0.8712962962962963, 0.028645833333333332, 0.15925925925925927, 1)\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"-\"*40)\n",
+    "print(\"Match Info (1st entry):\")\n",
+    "print(match_info[0])\n",
+    "print(\"-\"*40)\n",
+    "\n",
+    "print(\"Bounding boxes and other information of all objects in an image (1st entry):\")\n",
+    "print(obj_in_image[0])\n",
+    "print(\"-\"*40)\n",
+    "\n",
+    "print(\"Raw Image Data (1st entry):\")\n",
+    "print(images[0])\n",
+    "print(\"-\"*40)\n",
+    "\n",
+    "print(f\"Match Info Keys:\")\n",
+    "print(match_info[0].keys())\n",
+    "print(\"-\"*40)\n",
+    "\n",
+    "print(\"obj_in_image Keys:\")\n",
+    "print(obj_in_image[0].keys())\n",
+    "print(\"-\"*40)\n",
+    "\n",
+    "print(\"Image Data Keys:\")\n",
+    "print(images[0].keys())\n",
+    "print(\"-\"*40)\n",
+    "\n",
+    "# Bounding Boxes (Image): A List of Tuples ()\n",
+    "print(f\"This is a Tuple: {obj_in_image[0]['Bounding Boxes (Image)'][0]}\")\n",
+    "\n",
+    "# Teams: A List of String\n",
+    "# Roles: A List of String\n",
+    "# Jersey Numbers: A List of String"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "4e2097b9",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-01-09T01:33:46.193304Z",
+     "iopub.status.busy": "2025-01-09T01:33:46.192977Z",
+     "iopub.status.idle": "2025-01-09T01:33:47.544794Z",
+     "shell.execute_reply": "2025-01-09T01:33:47.543600Z"
+    },
+    "papermill": {
+     "duration": 1.357573,
+     "end_time": "2025-01-09T01:33:47.546742",
+     "exception": false,
+     "start_time": "2025-01-09T01:33:46.189169",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# List of paths to image, list_of_players[i] corresponds to all the bounding boxes of \"people\" in imgs_path[i] and their labels\n",
+    "imgs_path = []\n",
+    "# List of players to train YOLO to detect \"person\" class, annotated by class_id = 0\n",
+    "list_of_person = []\n",
+    "\n",
+    "# Contains a tuple of (Jersey Number, Team, Role) of designated \"person\" \n",
+    "# Stored each image's labels with the class \"person\"\n",
+    "labels = []\n",
+    "\n",
+    "# Loop through all images\n",
+    "for img in obj_in_image:\n",
+    "    imgs_path.append(img['Image Path'])\n",
+    "    people = []\n",
+    "    label_of_img = []\n",
+    "    # Loop through all bounding boxes the image has\n",
+    "    for i, bbs in enumerate(img['Bounding Boxes (Image)']):\n",
+    "        category_id, x_center, y_center, width, height, track_id = bbs\n",
+    "        \n",
+    "        # Clarify if that bounding box is a person or not\n",
+    "        if (1 <= category_id <= 3):\n",
+    "            num, team, role = img['Jersey Numbers'][i], img['Teams'][i], img['Roles'][i]\n",
+    "            label = (num, team, role)\n",
+    "            class_player = 0\n",
+    "            person = (class_player, x_center, y_center, width, height, track_id)\n",
+    "            people.append(person)\n",
+    "            label_of_img.append(label)\n",
+    "    labels.append(label_of_img)\n",
+    "    list_of_person.append(people)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "b094546e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-01-09T01:33:47.554480Z",
+     "iopub.status.busy": "2025-01-09T01:33:47.554139Z",
+     "iopub.status.idle": "2025-01-09T01:33:47.561883Z",
+     "shell.execute_reply": "2025-01-09T01:33:47.560512Z"
+    },
+    "papermill": {
+     "duration": 0.013466,
+     "end_time": "2025-01-09T01:33:47.563502",
+     "exception": false,
+     "start_time": "2025-01-09T01:33:47.550036",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "----------------------------------------\n",
+      "['/kaggle/input/gsr-soccernet-train-set/SNGS-060/img1/000001.jpg', '/kaggle/input/gsr-soccernet-train-set/SNGS-060/img1/000002.jpg']\n",
+      "----------------------------------------\n",
+      "All people of image path: /kaggle/input/gsr-soccernet-train-set/SNGS-060/img1/000001.jpg (class_id for person = 0) is: \n",
+      "[(0, 0.4903645833333333, 0.8712962962962963, 0.028645833333333332, 0.15925925925925927, 1), (0, 0.4859375, 0.5888888888888889, 0.016666666666666666, 0.11296296296296296, 2), (0, 0.51171875, 0.5773148148148148, 0.027604166666666666, 0.12314814814814815, 3), (0, 0.6661458333333333, 0.6884259259259259, 0.022916666666666665, 0.13055555555555556, 4), (0, 0.9911458333333333, 0.41712962962962963, 0.015625, 0.09351851851851851, 5), (0, 0.89921875, 0.3384259259259259, 0.011979166666666667, 0.075, 6), (0, 0.8046875, 0.48055555555555557, 0.026041666666666668, 0.07592592592592592, 7), (0, 0.7481770833333333, 0.5439814814814815, 0.021354166666666667, 0.10462962962962963, 8), (0, 0.5768229166666666, 0.38981481481481484, 0.0171875, 0.07962962962962963, 9), (0, 0.5151041666666667, 0.34305555555555556, 0.011458333333333333, 0.06944444444444445, 10), (0, 0.5216145833333333, 0.4777777777777778, 0.015104166666666667, 0.0962962962962963, 11), (0, 0.4942708333333333, 0.3333333333333333, 0.0125, 0.07222222222222222, 12), (0, 0.49192708333333335, 0.28564814814814815, 0.011979166666666667, 0.05277777777777778, 13), (0, 0.43046875, 0.362962962962963, 0.028645833333333332, 0.07222222222222222, 14), (0, 0.340625, 0.4083333333333333, 0.017708333333333333, 0.08703703703703704, 15), (0, 0.13489583333333333, 0.4736111111111111, 0.014583333333333334, 0.10092592592592593, 16), (0, 0.10494791666666667, 0.26851851851851855, 0.013020833333333334, 0.053703703703703705, 17)]\n",
+      "----------------------------------------\n",
+      "All labels of image path: /kaggle/input/gsr-soccernet-train-set/SNGS-060/img1/000001.jpg is: \n",
+      "[('10', 'left', 'player'), ('30', 'left', 'player'), ('27', 'right', 'player'), ('10', 'right', 'player'), ('75', 'right', 'player'), (None, 'right', 'player'), ('8', 'right', 'player'), ('4', 'right', 'player'), ('14', 'right', 'player'), (None, 'right', 'player'), ('3', 'left', 'player'), ('25', 'left', 'player'), (None, 'left', 'player'), (None, None, 'referee'), (None, 'left', 'player'), ('8', 'left', 'player'), (None, None, 'referee')]\n",
+      "----------------------------------------\n",
+      "The fist person of the image path /kaggle/input/gsr-soccernet-train-set/SNGS-060/img1/000001.jpg is (0, 0.4903645833333333, 0.8712962962962963, 0.028645833333333332, 0.15925925925925927, 1) with the label ('10', 'left', 'player')\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Example\n",
+    "print(\"-\"*40)\n",
+    "print(imgs_path[:2])\n",
+    "print(\"-\"*40)\n",
+    "print(f\"All people of image path: {imgs_path[0]} (class_id for person = 0) is: \")\n",
+    "print(f\"{list_of_person[0]}\")\n",
+    "print(\"-\"*40)\n",
+    "print(f\"All labels of image path: {imgs_path[0]} is: \")\n",
+    "print(f\"{labels[0]}\")\n",
+    "print(\"-\"*40)\n",
+    "print(f\"The fist person of the image path {imgs_path[0]} is {list_of_person[0][0]} with the label {labels[0][0]}\")\n",
+    "\n",
+    "# After fed into YOLO to train to detect a person, the output of YOLO will then go through another model to predict Jersey's Number, Role and team"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "d117dfff",
+   "metadata": {
+    "papermill": {
+     "duration": 0.002753,
+     "end_time": "2025-01-09T01:33:47.569624",
+     "exception": false,
+     "start_time": "2025-01-09T01:33:47.566871",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Doesn't include the following: Categories key and supercategory such as Pitch (I don't know what it does)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "6bef0b33",
+   "metadata": {
+    "papermill": {
+     "duration": 0.002688,
+     "end_time": "2025-01-09T01:33:47.575279",
+     "exception": false,
+     "start_time": "2025-01-09T01:33:47.572591",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "---------------------------------------------"
+   ]
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "none",
+   "dataSources": [
+    {
+     "datasetId": 6441116,
+     "sourceId": 10395755,
+     "sourceType": "datasetVersion"
+    }
+   ],
+   "dockerImageVersionId": 30823,
+   "isGpuEnabled": false,
+   "isInternetEnabled": true,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.12"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 226.080158,
+   "end_time": "2025-01-09T01:33:48.700822",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2025-01-09T01:30:02.620664",
+   "version": "2.6.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
